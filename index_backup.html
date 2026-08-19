@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="gu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>White Gold Machine Analyzer</title>
+    <!-- Relative styles for both offline browser viewing and local server rendering -->
+    <link rel="stylesheet" href="static/css/style.css">
+    <!-- Dynamic Port Config for file:/// CORS routing -->
+    <script src="static/js/config.js"></script>
+    <!-- Local Offline Chart.js -->
+    <script src="static/js/chart.min.js"></script>
+    <!-- Local Offline SheetJS (Excel reader/writer) -->
+    <script src="static/js/xlsx.full.min.js"></script>
+</head>
+<body>
+
+    <!-- SIDEBAR NAVIGATION -->
+    <aside>
+        <div class="brand">
+            <h1>White Gold</h1>
+            <span>ડેટા એન્ટ્રી અને એનાલિસિસ</span>
+        </div>
+        <ul class="nav-links">
+            <li>
+                <a class="nav-item active" data-page="dashboard">
+                    <span class="nav-icon">📊</span> ડેશબોર્ડ
+                </a>
+            </li>
+            <li>
+                <a class="nav-item" data-page="new-entry">
+                    <span class="nav-icon">✏️</span> નવી એન્ટ્રી
+                </a>
+            </li>
+            <li>
+                <a class="nav-item" data-page="master-panel">
+                    <span class="nav-icon">⚙️</span> માસ્ટર પેનલ
+                </a>
+            </li>
+            <li>
+                <a class="nav-item" data-page="history">
+                    <span class="nav-icon">📋</span> ડેટા હિસ્ટ્રી
+                </a>
+            </li>
+            <li>
+                <a class="nav-item" data-page="machine-analysis">
+                    <span class="nav-icon">📈</span> મશીન એનાલિસિસ
+                </a>
+            </li>
+        </ul>
+    </aside>
+
+    <!-- MAIN VIEWPORT -->
+    <main>
+        <!-- Global Alert Box -->
+        <div id="global-alert" class="alert"></div>
+
+        <!-- 1. DASHBOARD PAGE -->
+        <section id="dashboard-page" class="page active">
+            <header>
+                <div class="header-title">
+                    <h2>ઓવરઓલ મશીન ડેશબોર્ડ</h2>
+                    <p>બધા મશીનનો સરેરાશ ડેટા અને પરફોર્મન્સ</p>
+                </div>
+                
+                <!-- Dashboard Filters & Exports -->
+                <div class="filter-bar">
+                    <div class="form-group" style="width: 140px;">
+                        <label for="dash_filter_start">શરૂઆતની તારીખ</label>
+                        <input type="date" id="dash_filter_start" style="width:100%;">
+                    </div>
+                    <div class="form-group" style="width: 140px;">
+                        <label for="dash_filter_end">અંતિમ તારીખ</label>
+                        <input type="date" id="dash_filter_end" style="width:100%;">
+                    </div>
+                    <!-- MULTI-SELECT MACHINE FILTER -->
+                    <div class="form-group" style="width: 200px; position: relative;">
+                        <label>મશીન નંબર</label>
+                        <div class="search-select-wrapper">
+                            <div class="multi-select-container" id="dash_filter_machine_container">
+                                <input type="text" id="dash_filter_machine_search" class="multi-select-input" placeholder="પસંદ કરો...">
+                            </div>
+                            <input type="hidden" id="dash_filter_machine">
+                            <div class="search-select-dropdown" id="dash_filter_machine_dropdown"></div>
+                        </div>
+                    </div>
+                    <!-- MULTI-SELECT OPERATOR FILTER -->
+                    <div class="form-group" style="width: 200px; position: relative;">
+                        <label>ઓપરેટર</label>
+                        <div class="search-select-wrapper">
+                            <div class="multi-select-container" id="dash_filter_operator_container">
+                                <input type="text" id="dash_filter_operator_search" class="multi-select-input" placeholder="પસંદ કરો...">
+                            </div>
+                            <input type="hidden" id="dash_filter_operator">
+                            <div class="search-select-dropdown" id="dash_filter_operator_dropdown"></div>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 6px; margin-top: 14px;">
+                        <button id="btn_apply_dash_filter" class="btn btn-primary btn-sm">ફિલ્ટર</button>
+                        <button id="btn_reset_dash_filter" class="btn btn-secondary btn-sm">રીસેટ</button>
+                    </div>
+                    <div style="display: flex; gap: 6px; margin-left: auto; margin-top: 14px;">
+                        <button id="btn_dash_excel" class="btn btn-primary btn-sm" title="ફિલ્ટર કરેલ ડેટા એક્સેલ ડાઉનલોડ">📥 Excel</button>
+                        <button id="btn_dash_pdf" class="btn btn-secondary btn-sm" title="ડેશબોર્ડ PDF પ્રિન્ટ">🖨️ PDF</button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Stats Grid -->
+            <div class="stats-grid">
+                <div class="stat-card blue">
+                    <div class="stat-header">
+                        <span>કુલ એન્ટ્રી</span>
+                        <span>📝</span>
+                    </div>
+                    <div class="stat-value" id="total-entries">0</div>
+                </div>
+                <div class="stat-card green">
+                    <div class="stat-header">
+                        <span>કુલ ઉત્પાદન (NAG)</span>
+                        <span>📦</span>
+                    </div>
+                    <div class="stat-value" id="total-nag">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <span>સરેરાશ કાચું વજન</span>
+                        <span>⚖️</span>
+                    </div>
+                    <div class="stat-value" id="avg-raw">0.000 Cts</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-header">
+                        <span>સરેરાશ પ્રિન્ટ વજન</span>
+                        <span>🖨️</span>
+                    </div>
+                    <div class="stat-value" id="avg-print">0.000 Cts</div>
+                </div>
+                <div class="stat-card blue">
+                    <div class="stat-header">
+                        <span>સરેરાશ ડીફરન્સ (%)</span>
+                        <span>📉</span>
+                    </div>
+                    <div class="stat-value" id="avg-diff">0.00%</div>
+                </div>
+            </div>
+
+            <!-- Detail stats row -->
+            <div class="dashboard-row">
+                <!-- Chart card -->
+                <div class="card" style="margin-bottom: 0;">
+                    <div class="card-header">
+                        <h3>મશીન વાઈઝ સરેરાશ ડીફરન્સ (%)</h3>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="dashboardChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Highlight Cards Column -->
+                <div style="display: flex; flex-direction: column; gap: 20px;">
+                    <div class="stat-card red" style="flex: 1; padding: 18px;">
+                        <div class="stat-header">
+                            <span>સૌથી વધુ ડીફરન્સ</span>
+                            <span>🔥</span>
+                        </div>
+                        <div class="stat-value" id="high-diff-val" style="font-size: 1.5rem; color: var(--accent-red);">0.00%</div>
+                        <div class="stat-footer" id="high-diff-detail" style="font-size:0.75rem;">-</div>
+                    </div>
+                    
+                    <div class="stat-card green" style="flex: 1; padding: 18px;">
+                        <div class="stat-header">
+                            <span>સૌથી ઓછો ડીફરન્સ</span>
+                            <span>✅</span>
+                        </div>
+                        <div class="stat-value" id="low-diff-val" style="font-size: 1.5rem; color: var(--accent-green);">0.00%</div>
+                        <div class="stat-footer" id="low-diff-detail" style="font-size:0.75rem;">-</div>
+                    </div>
+                    
+                    <div class="stat-card" style="flex: 1; padding: 18px; background-color: var(--bg-sidebar); color: var(--text-light);">
+                        <div class="stat-header" style="color: hsl(224, 20%, 75%);">
+                            <span>છેલ્લી એન્ટ્રી</span>
+                            <span>⏰</span>
+                        </div>
+                        <div class="stat-value" id="last-entry-detail" style="font-size: 1.3rem; color: var(--text-light); margin-bottom: 4px;">-</div>
+                        <div class="stat-footer" id="last-entry-date" style="color: hsl(224, 20%, 65%); font-size:0.75rem;">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Leaderboards -->
+            <div class="card" style="margin-top: 24px;">
+                <div class="card-header">
+                    <h3>રેન્કિંગ લીડરબોર્ડ (Leaderboards)</h3>
+                </div>
+                
+                <!-- 1. MACHINE LEADERBOARDS -->
+                <h3 style="margin-bottom: 12px; font-weight: bold; color: var(--accent-blue); font-size: 1.15rem; border-left: 4px solid var(--accent-blue); padding-left: 8px;">૧. મશીન રેન્કિંગ લીડરબોર્ડ</h3>
+                
+                <h4 style="margin-bottom: 12px; font-weight: 600; color: var(--text-secondary);">છેલ્લા ૨૪ કલાકમાં એન્ટ્રીઓ (મશીન)</h4>
+                <div class="ranking-grid" style="margin-bottom: 30px;">
+                    <div class="ranking-card">
+                        <h4 class="highest">સૌથી વધુ ૧૦ મશીન 🔥</h4>
+                        <ul class="ranking-list" id="rank-24h-highest"></ul>
+                    </div>
+                    <div class="ranking-card">
+                        <h4 class="lowest">સૌથી ઓછા ૧૦ મશીન ✅</h4>
+                        <ul class="ranking-list" id="rank-24h-lowest"></ul>
+                    </div>
+                </div>
+
+                <h4 style="margin-bottom: 12px; font-weight: 600; color: var(--text-secondary);">છેલ્લા ૧ મહિનામાં એન્ટ્રીઓ (મશીન)</h4>
+                <div class="ranking-grid" style="margin-bottom: 40px;">
+                    <div class="ranking-card">
+                        <h4 class="highest">સૌથી વધુ ૫ મશીન 🔥</h4>
+                        <ul class="ranking-list" id="rank-30d-highest"></ul>
+                    </div>
+                    <div class="ranking-card">
+                        <h4 class="lowest">સૌથી ઓછા ૫ મશીન ✅</h4>
+                        <ul class="ranking-list" id="rank-30d-lowest"></ul>
+                    </div>
+                </div>
+
+                <!-- 2. OPERATOR LEADERBOARDS -->
+                <h3 style="margin-bottom: 12px; font-weight: bold; color: var(--accent-green); font-size: 1.15rem; border-left: 4px solid var(--accent-green); padding-left: 8px;">૨. ઓપરેટર રેન્કિંગ લીડરબોર્ડ</h3>
+                
+                <h4 style="margin-bottom: 12px; font-weight: 600; color: var(--text-secondary);">છેલ્લા ૨૪ કલાકમાં એન્ટ્રીઓ (ઓપરેટર)</h4>
+                <div class="ranking-grid" style="margin-bottom: 30px;">
+                    <div class="ranking-card">
+                        <h4 class="highest">સૌથી વધુ ૫ ઓપરેટર 🔥</h4>
+                        <ul class="ranking-list" id="rank-op-24h-highest"></ul>
+                    </div>
+                    <div class="ranking-card">
+                        <h4 class="lowest">સૌથી ઓછા ૫ ઓપરેટર ✅</h4>
+                        <ul class="ranking-list" id="rank-op-24h-lowest"></ul>
+                    </div>
+                </div>
+
+                <h4 style="margin-bottom: 12px; font-weight: 600; color: var(--text-secondary);">છેલ્લા ૧ મહિનામાં એન્ટ્રીઓ (ઓપરેટર)</h4>
+                <div class="ranking-grid">
+                    <div class="ranking-card">
+                        <h4 class="highest">સૌથી વધુ ૫ ઓપરેટર 🔥</h4>
+                        <ul class="ranking-list" id="rank-op-30d-highest"></ul>
+                    </div>
+                    <div class="ranking-card">
+                        <h4 class="lowest">સૌથી ઓછા ૫ ઓપરેટર ✅</h4>
+                        <ul class="ranking-list" id="rank-op-30d-lowest"></ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. NEW ENTRY PAGE -->
+        <section id="new-entry-page" class="page">
+            <header>
+                <div class="header-title">
+                    <h2>નવી એન્ટ્રી ફોર્મ</h2>
+                    <p>મશીન પસંદ કરી ફોટો મુજબ ડેટા દાખલ કરો</p>
+                </div>
+            </header>
+
+            <div class="card" style="max-width: 800px; margin: 0 auto; overflow: visible;">
+                <form id="add-entry-form" autocomplete="off">
+                    <div class="form-row">
+                        <!-- Searchable Machine Selector -->
+                        <div class="form-group">
+                            <label for="machine_search_input">મશીન નંબર *</label>
+                            <div class="search-select-wrapper">
+                                <input type="text" id="machine_search_input" class="form-control" placeholder="ટાઈપ કરી મશીન શોધો..." required>
+                                <input type="hidden" id="machine_select" required>
+                                <div class="search-select-dropdown" id="machine_dropdown_list"></div>
+                            </div>
+                        </div>
+                        <!-- Date -->
+                        <div class="form-group">
+                            <label for="entry_date">તારીખ *</label>
+                            <input type="date" id="entry_date" class="form-control" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row triple">
+                        <!-- Kapan (Sticky Default) -->
+                        <div class="form-group">
+                            <label for="kapan">કાપણ *</label>
+                            <input type="text" id="kapan" class="form-control" placeholder="उदा. 874-8" required>
+                        </div>
+                        <!-- Lot No -->
+                        <div class="form-group">
+                            <label for="lot_no">લોટ નંબર *</label>
+                            <input type="number" id="lot_no" class="form-control" placeholder="લોટ નંબર લખો" min="1" step="1" required>
+                        </div>
+                        <!-- NAG / Pcs -->
+                        <div class="form-group">
+                            <label for="nag">નંગ (NAG) *</label>
+                            <input type="number" id="nag" class="form-control" placeholder="કુલ નંગ" min="1" step="1" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row triple">
+                        <!-- Raw Weight (Carat) -->
+                        <div class="form-group">
+                            <label for="raw_weight">કાચું વજન (Raw Weight - Carat/કેરેટ) *</label>
+                            <input type="number" id="raw_weight" class="form-control" placeholder="વજન કેરેટ માં લખો (Cts)" min="0.001" step="0.001" required>
+                        </div>
+                        <!-- Print Weight (Carat) -->
+                        <div class="form-group">
+                            <label for="print_weight">પ્રિન્ટ વજન (Print Weight - Carat/કેરેટ) *</label>
+                            <input type="number" id="print_weight" class="form-control" placeholder="વજન કેરેટ માં લખો (Cts)" min="0.001" step="0.001" required>
+                        </div>
+                        <!-- Difference (Auto Computed) -->
+                        <div class="form-group">
+                            <label for="difference" style="color: var(--accent-blue);">ડીફરન્સ % (ઓટો ગણતરી)</label>
+                            <input type="number" id="difference" class="form-control" placeholder="0.00" step="0.01" style="background-color: hsl(220, 20%, 93%); font-weight: 600;" readonly>
+                            <div class="suggestion-box" id="machine_diff_suggestion"></div>
+                        </div>
+                    </div>
+
+                    <!-- Searchable Operator Selector -->
+                    <div class="form-group">
+                        <label for="operator_search_input">ઓપરેટર નામ *</label>
+                        <div class="search-select-wrapper">
+                            <input type="text" id="operator_search_input" class="form-control" placeholder="ટાઈપ કરી ઓપરેટર શોધો..." required>
+                            <input type="hidden" id="operator" required>
+                            <div class="search-select-dropdown" id="operator_dropdown_list"></div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
+                        <button type="reset" class="btn btn-secondary">ફોર્મ સાફ કરો</button>
+                        <button type="submit" class="btn btn-primary">ડેટા સેવ કરો</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Last 20 Entries Grid -->
+            <div class="card" style="max-width: 1000px; margin: 30px auto 0 auto;">
+                <div class="card-header">
+                    <h3>છેલ્લા ૨૦ રેકોર્ડ્સ (તાજેતરની એન્ટ્રીઓ)</h3>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>તારીખ</th>
+                                <th>કાપણ</th>
+                                <th>લોટ નંબર</th>
+                                <th>કાચું વજન (Cts)</th>
+                                <th>પ્રિન્ટ વજન (Cts)</th>
+                                <th>NAG (Pcs)</th>
+                                <th>ડીફરન્સ</th>
+                                <th>મશીન નંબર</th>
+                                <th>ઓપરેટર</th>
+                                <th style="width: 80px;">એક્શન</th>
+                            </tr>
+                        </thead>
+                        <tbody id="new-entry-recent-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. COMBINED MASTER PANEL PAGE -->
+        <section id="master-panel-page" class="page">
+            <header>
+                <div class="header-title">
+                    <h2>માસ્ટર પેનલ</h2>
+                    <p>મશીન અને ઓપરેટર માસ્ટર ડેટા મેનેજમેન્ટ</p>
+                </div>
+            </header>
+
+            <div class="tab-container">
+                <div class="tab-nav">
+                    <button class="tab-btn active" data-tab="machine-tab">⚙️ મશીન માસ્ટર</button>
+                    <button class="tab-btn" data-tab="operator-tab">👤 ઓપરેટર માસ્ટર</button>
+                    <button class="tab-btn" data-tab="backup-tab">📋 બેકઅપ અને રીસ્ટોર</button>
+                </div>
+
+                <!-- Tab Pane 1: Machines -->
+                <div class="tab-pane active" id="machine-tab">
+                    <div class="master-panel-layout">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>નવું મશીન ઉમેરો</h3>
+                            </div>
+                            <form id="add-machine-form">
+                                <div class="form-group">
+                                    <label for="new_machine_no">મશીન નંબર / આઈડી *</label>
+                                    <input type="text" id="new_machine_no" class="form-control" placeholder="દા.ત. 15" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 10px;">મશીન સેવ કરો</button>
+                            </form>
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>મશીન લિસ્ટ</h3>
+                            </div>
+                            <div class="tag-list-container" id="machine-tags"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab Pane 2: Operators -->
+                <div class="tab-pane" id="operator-tab">
+                    <div class="master-panel-layout">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>નવો ઓપરેટર ઉમેરો</h3>
+                            </div>
+                            <form id="add-operator-form">
+                                <div class="form-group">
+                                    <label for="new_operator_name">ઓપરેટર નામ *</label>
+                                    <input type="text" id="new_operator_name" class="form-control" placeholder="દા.ત. Ramesh" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 10px;">ઓપરેટર સેવ કરો</button>
+                            </form>
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>ઓપરેટર લિસ્ટ</h3>
+                            </div>
+                            <div class="tag-list-container" id="operator-tags"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab Pane 3: Backup & Restore -->
+                <div class="tab-pane" id="backup-tab">
+                    <div class="master-panel-layout" style="grid-template-columns: 1fr 1fr;">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>મેન્યુઅલ બેકઅપ ડાઉનલોડ (Download Backup)</h3>
+                            </div>
+                            <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 20px; line-height: 1.5;">
+                                આ બટન દબાવવાથી આખા ડેટાબેઝ (તમામ એન્ટ્રીઓ, મશીનો અને ઓપરેટરો માસ્ટર) ની એક્સેલ ફાઇલ ડાઉનલોડ થશે, જેનો ઉપયોગ તમે બેકઅપ તરીકે કરી શકો છો.
+                           </p>
+                            <button id="btn_manual_backup_download" class="btn btn-primary" style="width: 100%;">📥 બેકઅપ ફાઇલ ડાઉનલોડ કરો</button>
+                        </div>
+                        
+                        <div class="card">
+                           <div class="card-header">
+                                <h3>બેકઅપ ફાઇલ ચડાવો (Upload/Restore Backup)</h3>
+                            </div>
+                            <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 20px; line-height: 1.5;">
+                                પહેલાં ડાઉનલોડ કરેલી સાચી બેકઅપ એક્સેલ ફાઇલ (`.xlsx`) પસંદ કરો અને અપલોડ કરો. આ કરવાથી અત્યારનો ડેટા ડિલીટ થઈ જશે અને બેકઅપ ફાઇલ વાળો ડેટા લોડ થશે.
+                            </p>
+                            <form id="backup-upload-form" enctype="multipart/form-data">
+                                <div class="form-group">
+                                    <input type="file" id="backup_file_input" name="file" accept=".xlsx" class="form-control" required style="padding: 8px 12px;">
+                                </div>
+                                <button type="submit" class="btn btn-danger" style="width: 100%; margin-top: 10px;">📤 બેકઅપ રીસ્ટોર કરો</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. DATA HISTORY PAGE -->
+        <section id="history-page" class="page">
+            <header>
+                <div class="header-title">
+                    <h2>ડેટા એન્ટ્રી હિસ્ટ્રી</h2>
+                    <p>Excel ફાઇલમાં નોંધાયેલ તમામ એન્ટ્રીઓની વિગત</p>
+                </div>
+                
+                <!-- History Filter Bar & Exports -->
+                <div class="filter-bar">
+                    <div class="form-group" style="width: 130px;">
+                        <label for="hist_filter_start">શરૂઆતની તારીખ</label>
+                        <input type="date" id="hist_filter_start" style="width:100%;">
+                    </div>
+                    <div class="form-group" style="width: 130px;">
+                        <label for="hist_filter_end">અંતિમ તારીખ</label>
+                        <input type="date" id="hist_filter_end" style="width:100%;">
+                    </div>
+                    <!-- MULTI-SELECT MACHINE FILTER -->
+                    <div class="form-group" style="width: 180px; position: relative;">
+                        <label>મશીન નંબર</label>
+                        <div class="search-select-wrapper">
+                            <div class="multi-select-container" id="hist_filter_machine_container">
+                                <input type="text" id="hist_filter_machine_search" class="multi-select-input" placeholder="પસંદ કરો...">
+                            </div>
+                            <input type="hidden" id="hist_filter_machine">
+                            <div class="search-select-dropdown" id="hist_filter_machine_dropdown"></div>
+                        </div>
+                    </div>
+                    <!-- MULTI-SELECT OPERATOR FILTER -->
+                    <div class="form-group" style="width: 180px; position: relative;">
+                        <label>ઓપરેટર</label>
+                        <div class="search-select-wrapper">
+                            <div class="multi-select-container" id="hist_filter_operator_container">
+                                <input type="text" id="hist_filter_operator_search" class="multi-select-input" placeholder="પસંદ કરો...">
+                            </div>
+                            <input type="hidden" id="hist_filter_operator">
+                            <div class="search-select-dropdown" id="hist_filter_operator_dropdown"></div>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 6px; margin-top: 14px;">
+                        <button id="btn_apply_hist_filter" class="btn btn-primary btn-sm">ફિલ્ટર</button>
+                        <button id="btn_reset_hist_filter" class="btn btn-secondary btn-sm">રીસેટ</button>
+                    </div>
+                    <div style="display: flex; gap: 6px; margin-left: auto; margin-top: 14px;">
+                        <button id="btn_hist_excel" class="btn btn-primary btn-sm">📥 Excel</button>
+                        <button id="btn_hist_pdf" class="btn btn-secondary btn-sm">🖨️ PDF</button>
+                    </div>
+                </div>
+            </header>
+
+            <div class="card">
+                <!-- Search wrapper & warning legend -->
+                <div class="table-header-tools">
+                    <div class="search-wrapper">
+                        <input type="text" id="search-entries" class="form-control" placeholder="કોઈપણ માહિતી કીવર્ડથી શોધો...">
+                    </div>
+                    
+                    <div style="font-size: 0.8rem; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                        <span style="font-weight: 600; color: var(--text-secondary);">ડીફરન્સ કલર:</span>
+                        <span style="display:flex; align-items:center; gap:2px;">
+                            <span style="display:inline-block; width:10px; height:10px; background:hsla(45, 100%, 50%, 0.15); border:1px solid hsl(45, 100%, 48%); border-radius:3px;"></span>
+                            <span style="color: hsl(45, 100%, 35%); font-size:0.75rem;">1-1.5%</span>
+                        </span>
+                        <span style="display:flex; align-items:center; gap:2px;">
+                            <span style="display:inline-block; width:10px; height:10px; background:hsla(25, 100%, 50%, 0.15); border:1px solid hsl(25, 100%, 50%); border-radius:3px;"></span>
+                            <span style="color: hsl(25, 100%, 40%); font-size:0.75rem;">1.5-2%</span>
+                        </span>
+                        <span style="display:flex; align-items:center; gap:2px;">
+                            <span style="display:inline-block; width:10px; height:10px; background:hsla(0, 84%, 60%, 0.15); border:1px solid var(--accent-red); border-radius:3px;"></span>
+                            <span style="color: var(--accent-red); font-size:0.75rem;">> 2%</span>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Table Container -->
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>તારીખ</th>
+                                <th>કાપણ</th>
+                                <th>લોટ નંબર</th>
+                                <th>કાચું વજન (Cts)</th>
+                                <th>પ્રિન્ટ વજન (Cts)</th>
+                                <th>NAG (Pcs)</th>
+                                <th>ડીફરન્સ</th>
+                                <th>મશીન નંબર</th>
+                                <th>ઓપરેટર</th>
+                                <th style="width: 80px;">એક્શન</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- 5. MACHINE ANALYSIS PAGE -->
+        <section id="machine-analysis-page" class="page">
+            <header>
+                <div class="header-title">
+                    <h2>મશીન વાઈઝ વિશ્લેષણ (Analysis)</h2>
+                    <p>ચોક્કસ મશીનનું પરફોર્મન્સ અને હિસ્ટ્રી ચેક કરો</p>
+                </div>
+                
+                <!-- Machine Analysis Dynamic Filter Bar & Exports -->
+                <div class="filter-bar" style="width:100%;">
+                    <!-- Main Machine selection -->
+                    <div class="form-group" style="width: 140px; position: relative;">
+                        <label for="analysis_machine_search">મશીન નંબર *</label>
+                        <div class="search-select-wrapper">
+                            <input type="text" id="analysis_machine_search" class="form-control" placeholder="મશીન પસંદ કરો..." style="padding: 8px 12px; font-size: 0.85rem;">
+                            <input type="hidden" id="analysis_machine_select">
+                            <div class="search-select-dropdown" id="analysis_machine_dropdown"></div>
+                        </div>
+                    </div>
+                    <div class="form-group" style="width: 130px;">
+                        <label for="analysis_filter_start">શરૂઆતની તારીખ</label>
+                        <input type="date" id="analysis_filter_start" style="width:100%;">
+                    </div>
+                    <div class="form-group" style="width: 130px;">
+                        <label for="analysis_filter_end">અંતિમ તારીખ</label>
+                        <input type="date" id="analysis_filter_end" style="width:100%;">
+                    </div>
+                    <!-- MULTI-SELECT OPERATOR FILTER -->
+                    <div class="form-group" style="width: 180px; position: relative;">
+                        <label>ઓપરેટર</label>
+                        <div class="search-select-wrapper">
+                            <div class="multi-select-container" id="analysis_filter_operator_container">
+                                <input type="text" id="analysis_filter_operator_search" class="multi-select-input" placeholder="પસંદ કરો...">
+                            </div>
+                            <input type="hidden" id="analysis_filter_operator">
+                            <div class="search-select-dropdown" id="analysis_filter_operator_dropdown"></div>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 6px; margin-top: 14px;">
+                        <button id="btn_apply_analysis_filter" class="btn btn-primary btn-sm">ફિલ્ટર</button>
+                        <button id="btn_reset_analysis_filter" class="btn btn-secondary btn-sm">રીસેટ</button>
+                    </div>
+                    <div style="display: flex; gap: 6px; margin-left: auto; margin-top: 14px;">
+                        <button id="btn_analysis_excel" class="btn btn-primary btn-sm">📥 Excel</button>
+                        <button id="btn_analysis_pdf" class="btn btn-secondary btn-sm">🖨️ PDF</button>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Analysis results -->
+            <div id="analysis-content" style="display: none;">
+                <!-- Stats Row -->
+                <div class="stats-grid">
+                    <div class="stat-card blue">
+                        <div class="stat-header"><span>કુલ એન્ટ્રી</span></div>
+                        <div class="stat-value" id="m-total-entries">0</div>
+                    </div>
+                    <div class="stat-card green">
+                        <div class="stat-header"><span>કુલ ઉત્પાદન (NAG)</span></div>
+                        <div class="stat-value" id="m-total-nag">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header"><span>સરેરાશ કાચું વજન</span></div>
+                        <div class="stat-value" id="m-avg-raw">0.000 Cts</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-header"><span>સરેરાશ પ્રિન્ટ વજન</span></div>
+                        <div class="stat-value" id="m-avg-print">0.000 Cts</div>
+                    </div>
+                    <div class="stat-card blue">
+                        <div class="stat-header"><span>સરેરાશ ડીફરન્સ</span></div>
+                        <div class="stat-value" id="m-avg-diff">0.00%</div>
+                    </div>
+                </div>
+
+                <!-- Trend Line Chart -->
+                <div class="dashboard-row equal">
+                    <!-- Chart Card -->
+                    <div class="card" style="margin-bottom: 0;">
+                        <div class="card-header">
+                            <h3>ડીફરન્સ ટ્રેન્ડ ગ્રાફ</h3>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="machineChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Highlight Details Card -->
+                    <div style="display: flex; flex-direction: column; gap: 20px;">
+                        <div class="stat-card red" style="flex: 1; padding: 18px;">
+                            <div class="stat-header">
+                                <span>સૌથી વધુ ડીફરન્સ</span>
+                                <span>🔥</span>
+                            </div>
+                            <div class="stat-value" id="m-high-diff">0.00%</div>
+                            <div class="stat-footer" id="m-high-detail" style="font-size:0.75rem;">-</div>
+                        </div>
+                        
+                        <div class="stat-card green" style="flex: 1; padding: 18px;">
+                            <div class="stat-header">
+                                <span>સૌથી ઓછો ડીફરન્સ</span>
+                                <span>✅</span>
+                            </div>
+                            <div class="stat-value" id="m-low-diff">0.00%</div>
+                            <div class="stat-footer" id="m-low-detail" style="font-size:0.75rem;">-</div>
+                        </div>
+
+                        <div class="stat-card blue" style="flex: 1.2; padding: 18px;">
+                            <div class="stat-header">
+                                <span>છેલ્લી એન્ટ્રી વિગત</span>
+                                <span>⏰</span>
+                            </div>
+                            <div class="stat-value" id="m-last-diff">0.00%</div>
+                            <div class="stat-footer" id="m-last-detail" style="font-weight: 600; margin-bottom: 4px; font-size:0.75rem;">-</div>
+                            <div class="stat-footer" id="m-last-specs" style="font-size:0.75rem;">-</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- History Table for Selected Machine -->
+                <div class="card" style="margin-top: 24px; margin-bottom: 0;">
+                    <div class="card-header">
+                        <h3>આ મશીનની ફિલ્ટર કરેલી તમામ એન્ટ્રીઓની યાદી</h3>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>તારીખ</th>
+                                    <th>કાપણ</th>
+                                    <th>લોટ નંબર</th>
+                                    <th>કાચું વજન (Cts)</th>
+                                    <th>પ્રિન્ટ વજન (Cts)</th>
+                                    <th>NAG (Pcs)</th>
+                                    <th>ડીફરન્સ</th>
+                                    <th>ઓપરેટર</th>
+                                </tr>
+                            </thead>
+                            <tbody id="m-history-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- 6. EDIT RECORD MODAL -->
+    <div class="modal-overlay" id="edit-modal">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h3>ડેટા એન્ટ્રી એડિટ કરો (Edit Record)</h3>
+                <button class="modal-close" id="btn-close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="edit-entry-form" autocomplete="off" style="overflow: visible;">
+                    <input type="hidden" id="edit_id">
+                    
+                    <div class="form-row">
+                        <!-- Machine Selector -->
+                        <div class="form-group">
+                            <label for="edit_machine_search">મશીન નંબર *</label>
+                            <div class="search-select-wrapper">
+                                <input type="text" id="edit_machine_search" class="form-control" placeholder="ટાઈપ કરી મશીન શોધો..." required>
+                                <input type="hidden" id="edit_machine_select" required>
+                                <div class="search-select-dropdown" id="edit_machine_dropdown"></div>
+                            </div>
+                        </div>
+                        <!-- Date -->
+                        <div class="form-group">
+                            <label for="edit_date">તારીખ *</label>
+                            <input type="date" id="edit_date" class="form-control" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row triple">
+                        <!-- Kapan -->
+                        <div class="form-group">
+                            <label for="edit_kapan">કાપણ *</label>
+                            <input type="text" id="edit_kapan" class="form-control" placeholder="उदा. 874-8" required>
+                        </div>
+                        <!-- Lot -->
+                        <div class="form-group">
+                            <label for="edit_lot_no">લોટ નંબર *</label>
+                            <input type="number" id="edit_lot_no" class="form-control" min="1" step="1" required>
+                        </div>
+                        <!-- NAG -->
+                        <div class="form-group">
+                            <label for="edit_nag">નંગ (NAG) *</label>
+                            <input type="number" id="edit_nag" class="form-control" min="1" step="1" required>
+                        </div>
+                    </div>
+
+                    <div class="form-row triple">
+                        <!-- Weights -->
+                        <div class="form-group">
+                            <label for="edit_raw_weight">કાચું વજન (Cts/કેરેટ) *</label>
+                            <input type="number" id="edit_raw_weight" class="form-control" min="0.001" step="0.001" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit_print_weight">પ્રિન્ટ વજન (Cts/કેરેટ) *</label>
+                            <input type="number" id="edit_print_weight" class="form-control" min="0.001" step="0.001" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="edit_difference" style="color: var(--accent-blue);">ડીફરન્સ % (ઓટો ગણતરી)</label>
+                            <input type="number" id="edit_difference" class="form-control" style="background-color: hsl(220, 20%, 93%); font-weight: 600;" readonly>
+                            <div class="suggestion-box" id="edit_machine_diff_suggestion"></div>
+                        </div>
+                    </div>
+
+                    <!-- Operator -->
+                    <div class="form-group">
+                        <label for="edit_operator_search">ઓપરેટર નામ *</label>
+                        <div class="search-select-wrapper">
+                            <input type="text" id="edit_operator_search" class="form-control" placeholder="ટાઈપ કરી ઓપરેટર શોધો..." required>
+                            <input type="hidden" id="edit_operator" required>
+                            <div class="search-select-dropdown" id="edit_operator_dropdown"></div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
+                        <button type="button" class="btn btn-secondary" id="btn-cancel-edit">રદ કરો</button>
+                        <button type="submit" class="btn btn-primary">સેવ ફેરફાર</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main JS Application script relative mapping -->
+    <script src="static/js/app.js"></script>
+</body>
+</html>
